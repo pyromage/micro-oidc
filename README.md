@@ -4,6 +4,8 @@ npm install openid-client express express-session
 
 ## Setup and Run the server
 
+Setup with railway or local
+
 ## Create a certificates directory
 
 mkdir certs
@@ -28,14 +30,14 @@ openssl req -new -x509 -key key.pem -out cert.pem -days 365
 
 ## Recommend Using MkCert
 
-# Install mkcert (macOS)
+## Install mkcert (macOS)
 
 brew install mkcert
 
-# Create and install CA
+## Create and install CA
 
 mkcert -install
 
-# Generate certificates
+## Generate certificates
 
 mkcert localhost
