@@ -1,37 +1,46 @@
 import express from 'express';
 import session from 'express-session';
-import * as openidClient from 'openid-client';
-import { webcrypto } from 'node:crypto';
+import { Issuer, generators } from 'openid-client';
 import { createHash } from 'node:crypto';
 import dotenv from 'dotenv';
-import https from 'https';
-import fs from 'fs';
-import path from 'path';
 
 dotenv.config();
 
-// Make crypto available globally for openid-client
-globalThis.crypto = webcrypto;
-
 const app = express();
-app.use(session({ secret: 'your_secret', resave: false, saveUninitialized: true }));
+const PORT = process.env.PORT || 3000;
+
+app.use(session({ 
+  secret: process.env.SESSION_SECRET || 'your_secret', 
+  resave: false, 
+  saveUninitialized: true 
+}));
 
 // Serve static files from public directory
 app.use(express.static('public'));
 
-let config;
+let client;
 
 (async () => {
-  // Discover the issuer configuration with client configuration
-  config = await openidClient.discovery(
-    new URL('https://login.microsoftonline.com/common/v2.0'),
-    process.env.CLIENT_ID,
-    process.env.CLIENT_SECRET
-  );
-  console.log('OIDC discovery complete');
+  try {
+    // Discover Microsoft's OIDC issuer
+    const issuer = await Issuer.discover('https://login.microsoftonline.com/common/v2.0');
+    
+    // Create client with the correct Railway URL
+    client = new issuer.Client({
+      client_id: process.env.CLIENT_ID,
+      client_secret: process.env.CLIENT_SECRET,
+      redirect_uris: ['https://micro-oidc-production.up.railway.app/auth/callback'],
+      response_types: ['code'],
+    });
+    
+    console.log('OIDC client configured successfully');
+  } catch (error) {
+    console.error('OIDC setup failed:', error);
+    process.exit(1);
+  }
 })();
 
-// Helper function to create proper PKCE challenge
+// Helper functions
 function base64URLEncode(str) {
   return str.toString('base64')
     .replace(/\+/g, '-')
@@ -44,15 +53,23 @@ function sha256(buffer) {
 }
 
 app.get('/auth', (req, res) => {
-  const codeVerifier = openidClient.randomPKCECodeVerifier();
-  const codeChallenge = base64URLEncode(sha256(codeVerifier));
-  const state = openidClient.randomState();
+  if (!client) {
+    return res.status(500).send('OIDC not configured yet, please try again in a moment');
+  }
+
+  // Generate PKCE parameters
+  const codeVerifier = generators.codeVerifier();
+  const codeChallenge = generators.codeChallenge(codeVerifier);
+  const state = generators.state();
   
   req.session.codeVerifier = codeVerifier;
   req.session.state = state;
 
-  const authUrl = openidClient.buildAuthorizationUrl(config, {
-    redirect_uri: 'https://localhost:3000/auth/callback',
+  // Use the correct Railway URL
+  const baseUrl = 'https://micro-oidc-production.up.railway.app';
+
+  const authUrl = client.authorizationUrl({
+    redirect_uri: `${baseUrl}/auth/callback`,
     scope: 'openid profile email',
     state: state,
     code_challenge: codeChallenge,
@@ -64,24 +81,19 @@ app.get('/auth', (req, res) => {
 
 app.get('/auth/callback', async (req, res) => {
   try {
-    // Validate state parameter manually
     if (req.query.state !== req.session.state) {
       return res.status(400).send('Invalid state parameter');
     }
 
-    // Create URL without state parameter for the library
-    const callbackUrl = new URL('https://localhost:3000/auth/callback');
-    callbackUrl.searchParams.set('code', req.query.code);
+    const baseUrl = 'https://micro-oidc-production.up.railway.app';
+    const params = client.callbackParams(req);
     
-    // Exchange authorization code for tokens
-    const tokens = await openidClient.authorizationCodeGrant(config, callbackUrl, {
-      pkceCodeVerifier: req.session.codeVerifier,
+    const tokenSet = await client.callback(`${baseUrl}/auth/callback`, params, {
+      code_verifier: req.session.codeVerifier,
+      state: req.session.state,
     });
 
-    console.log('Tokens received:', tokens);
-
-    // Extract user info from ID token instead of calling userinfo endpoint
-    const claims = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64').toString());
+    const claims = tokenSet.claims();
     
     res.send(`
       <!DOCTYPE html>
@@ -89,10 +101,44 @@ app.get('/auth/callback', async (req, res) => {
       <head>
           <title>Authentication Successful</title>
           <style>
-              body { font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; }
-              .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 1rem; border-radius: 6px; margin-bottom: 2rem; }
-              .user-info { background: #f8f9fa; padding: 1.5rem; border-radius: 6px; }
-              .back-btn { display: inline-block; background: #0078d4; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-top: 1rem; }
+              body { 
+                font-family: 'Segoe UI', sans-serif; 
+                max-width: 800px; 
+                margin: 0 auto; 
+                padding: 2rem; 
+                background: linear-gradient(135deg, #ff6b6b, #833ab4);
+                color: #fff; 
+                min-height: 100vh;
+              }
+              .success { 
+                background: rgba(212, 237, 218, 0.9); 
+                border: 1px solid #c3e6cb; 
+                color: #155724; 
+                padding: 1rem; 
+                border-radius: 6px; 
+                margin-bottom: 2rem; 
+              }
+              .user-info { 
+                background: rgba(0, 0, 0, 0.7); 
+                padding: 1.5rem; 
+                border-radius: 6px; 
+                border: 1px solid rgba(255, 255, 255, 0.1);
+              }
+              .back-btn { 
+                display: inline-block; 
+                background: #8BC34A; 
+                color: #000; 
+                padding: 10px 20px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                margin-top: 1rem; 
+                font-weight: bold; 
+                transition: all 0.3s ease;
+              }
+              .back-btn:hover {
+                background: #76b039;
+                transform: translateY(-2px);
+              }
           </style>
       </head>
       <body>
@@ -102,18 +148,14 @@ app.get('/auth/callback', async (req, res) => {
           </div>
           
           <div class="user-info">
-              <h2>User Information</h2>
+              <h2>🔐 User Information</h2>
               <p><strong>Name:</strong> ${claims.name || 'N/A'}</p>
               <p><strong>Email:</strong> ${claims.email || claims.preferred_username || 'N/A'}</p>
               <p><strong>Subject:</strong> ${claims.sub}</p>
+              <p><strong>Issued:</strong> ${new Date(claims.iat * 1000).toLocaleString()}</p>
           </div>
           
-          <a href="/" class="back-btn">← Back to Home</a>
-          
-          <details style="margin-top: 2rem;">
-              <summary>Raw Claims Data</summary>
-              <pre style="background: #f1f1f1; padding: 1rem; border-radius: 4px; overflow-x: auto;">${JSON.stringify(claims, null, 2)}</pre>
-          </details>
+          <a href="/" class="back-btn">← Back to Monster Energy Portal</a>
       </body>
       </html>
     `);
@@ -123,11 +165,12 @@ app.get('/auth/callback', async (req, res) => {
       <!DOCTYPE html>
       <html>
       <head><title>Authentication Failed</title></head>
-      <body style="font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem;">
-          <div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 1rem; border-radius: 6px;">
+      <body style="font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; background: linear-gradient(135deg, #ff6b6b, #833ab4); color: #fff; min-height: 100vh;">
+          <div style="background: rgba(248, 215, 218, 0.9); border: 1px solid #f5c6cb; color: #721c24; padding: 1rem; border-radius: 6px;">
               <h1>❌ Authentication Failed</h1>
               <p>There was an error during the authentication process.</p>
-              <a href="/" style="display: inline-block; background: #0078d4; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-top: 1rem;">← Back to Home</a>
+              <p><strong>Error:</strong> ${error.message}</p>
+              <a href="/" style="display: inline-block; background: #8BC34A; color: #000; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-top: 1rem; font-weight: bold;">← Back to Monster Energy Portal</a>
           </div>
       </body>
       </html>
@@ -135,12 +178,10 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
-// HTTPS Server Configuration
-const options = {
-  key: fs.readFileSync('./certs/key.pem'),
-  cert: fs.readFileSync('./certs/cert.pem')
-};
+app.get('/', (req, res) => {
+  res.sendFile('index.html', { root: './public' });
+});
 
-https.createServer(options, app).listen(3000, () => {
-  console.log('App running on https://localhost:3000');
+app.listen(PORT, () => {
+  console.log(`🚀 Monster Energy OIDC Portal running on port ${PORT}`);
 });
