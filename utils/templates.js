@@ -60,35 +60,46 @@ const baseStyles = `
   }
 `;
 
-export function generateSuccessPage(claims, provider) {
-  const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
-  const badgeColor = provider === 'microsoft' ? '#0078d4' : '#4285f4';
+export function generateSuccessPage(userData) {
+  // Add null checks and default values
+  const safeUserData = {
+    name: userData?.name || userData?.given_name || userData?.displayName || 'User',
+    email: userData?.email || userData?.mail || userData?.userPrincipalName || 'No email provided',
+    sub: userData?.sub || userData?.id || userData?.oid || 'Unknown ID',
+    picture: userData?.picture || userData?.photo?.url || null,
+    // Add any other fields your template expects
+    ...userData
+  };
+
+  console.log('Template received user data:', JSON.stringify(safeUserData, null, 2));
+
+  // Your existing template logic, but use safeUserData instead of userData
+  // Make sure all string operations check for existence first
+  const displayName = safeUserData.name || 'User';
+  const firstLetter = displayName.charAt ? displayName.charAt(0).toUpperCase() : 'U';
   
   return `
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Authentication Successful</title>
-        <style>${baseStyles}</style>
+      <title>Authentication Successful</title>
+      <style>
+        ${baseStyles}
+      </style>
     </head>
     <body>
-        <div class="message-box success">
-            <h1>✅ Authentication Successful!</h1>
-            <p>You have been successfully authenticated with ${providerName}.
-               <span class="provider-badge" style="background: ${badgeColor}">${providerName}</span>
-            </p>
-        </div>
-        
+      <div class="container">
+        <h1>✅ Authentication Successful!</h1>
         <div class="user-info">
-            <h2>🔐 User Information</h2>
-            <p><strong>Name:</strong> ${claims.name || 'N/A'}</p>
-            <p><strong>Email:</strong> ${claims.email || claims.preferred_username || 'N/A'}</p>
-            <p><strong>Provider:</strong> ${providerName}</p>
-            <p><strong>Subject:</strong> ${claims.sub}</p>
-            <p><strong>Issued:</strong> ${new Date(claims.iat * 1000).toLocaleString()}</p>
+          <div class="avatar">${firstLetter}</div>
+          <div class="details">
+            <h2>Welcome, ${safeUserData.name}!</h2>
+            <p><strong>Email:</strong> ${safeUserData.email}</p>
+            <p><strong>ID:</strong> ${safeUserData.sub}</p>
+          </div>
         </div>
-        
         <a href="/" class="back-btn">← Back to Monster Energy Portal</a>
+      </div>
     </body>
     </html>
   `;

@@ -93,22 +93,41 @@ class AuthService {
     });
   }
 
-  async handleCallback(provider, callbackParams, sessionParams) {
+  async handleCallback(provider, params, session) {
     const client = this.getClient(provider);
     if (!client) {
       throw new Error(`${provider} client not available`);
     }
 
-    const tokenSet = await client.callback(
-      `${config.baseUrl}/auth/callback`,
-      callbackParams,
-      {
-        code_verifier: sessionParams.codeVerifier,
-        state: sessionParams.state,
-      }
-    );
+    try {
+      const tokenSet = await client.callback(
+        `${config.baseUrl}/auth/callback`,
+        params,
+        {
+          code_verifier: session.codeVerifier,
+          state: session.state,
+        }
+      );
 
-    return tokenSet.claims();
+      // Get user info from the ID token or userinfo endpoint
+      const claims = tokenSet.claims();
+
+      // Log what we're getting from the provider
+      console.log('Raw claims from provider:', JSON.stringify(claims, null, 2));
+
+      // Make sure we return the expected structure
+      return {
+        sub: claims.sub,
+        name: claims.name || claims.given_name || claims.displayName,
+        email: claims.email || claims.mail || claims.userPrincipalName,
+        picture: claims.picture || claims.photo?.url,
+        // Include all original claims
+        ...claims
+      };
+    } catch (error) {
+      console.error('Error in handleCallback:', error);
+      throw error;
+    }
   }
 }
 

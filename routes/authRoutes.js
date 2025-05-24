@@ -28,26 +28,43 @@ router.get('/debug/auth-info', (req, res) => {
 // Callback route MUST come before /auth/:provider
 router.get('/auth/callback', async (req, res) => {
   try {
-    console.log('🔄 Callback received');
-    const { state: queryState } = req.query;
+    // 1. Handle OAuth errors FIRST
+    const { error, error_description } = req.query;
+    if (error) {
+      console.log(`❌ OAuth error: ${error}`);
+      return res.status(400).send(generateErrorPage(
+        'OAuth Error',
+        `${error}: ${error_description || 'Authentication failed'}`
+      ));
+    }
+
+    // 2. Check for required session data
     const { state: sessionState, provider, codeVerifier } = req.session;
+    if (!provider) {
+      console.log('❌ No provider in session');
+      return res.status(400).send('No provider found in session');
+    }
+
+    // 3. Validate state parameter
+    const { state: queryState } = req.query;
+    if (!queryState) {
+      console.log('❌ Missing state parameter');
+      return res.status(400).send('Missing state parameter');
+    }
 
     if (queryState !== sessionState) {
       console.log('❌ State mismatch');
       return res.status(400).send('Invalid state parameter');
     }
 
-    if (!provider) {
-      console.log('❌ No provider in session');
-      return res.status(400).send('No provider found in session');
-    }
-
+    // 4. Get and validate client
     const client = authService.getClient(provider);
     if (!client) {
       console.log(`❌ No client for ${provider}`);
       return res.status(503).send(`${provider} authentication not available`);
     }
 
+    // 5. Process callback
     console.log(`🔄 Processing callback for ${provider}`);
     const callbackParams = client.callbackParams(req);
     const claims = await authService.handleCallback(provider, callbackParams, {
@@ -56,17 +73,32 @@ router.get('/auth/callback', async (req, res) => {
     });
 
     console.log(`✅ Auth successful for ${provider}`);
-
-    // Clear session data
-    delete req.session.codeVerifier;
+    console.log('Claims received:', JSON.stringify(claims, null, 2));
+    
+    // Clear session data (security best practice)
     delete req.session.state;
     delete req.session.provider;
+    delete req.session.codeVerifier;
 
-    res.send(generateSuccessPage(claims, provider));
+    // Success response with error handling
+    try {
+      const successPage = generateSuccessPage(claims);
+      return res.send(successPage);
+    } catch (templateError) {
+      console.error('Template generation error:', templateError);
+      console.error('Claims that caused error:', JSON.stringify(claims, null, 2));
+      return res.status(500).send(generateErrorPage(
+        'Template Error',
+        'Failed to generate success page'
+      ));
+    }
+    
   } catch (error) {
-    console.error('Auth callback error:', error);
-    const provider = req.session.provider || 'Unknown';
-    res.status(500).send(generateErrorPage(error, provider));
+    console.error('❌ Callback error:', error);
+    return res.status(500).send(generateErrorPage(
+      'Authentication Error',
+      'Failed to complete authentication'
+    ));
   }
 });
 

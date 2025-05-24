@@ -10,6 +10,9 @@
     "test": "NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest --verbose",
     "test:watch": "NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest --watch --verbose",
     "test:coverage": "NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest --coverage --verbose",
+    "test:coverage:open": "npm run test:coverage && open coverage/lcov-report/index.html",
+    "test:coverage:json": "NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=json-summary",
+    "coverage:view": "open coverage/lcov-report/index.html",
     "health": "curl -f http://localhost:3000/health || exit 1"
   },
   "jest": {
@@ -25,8 +28,7 @@
       "!node_modules/**",
       "!coverage/**",
       "!jest.config.js",
-      "!__tests__/**",
-      "!server.js"
+      "!__tests__/**"
     ],
     "coverageReporters": [
       "text",

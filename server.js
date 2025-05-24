@@ -9,7 +9,8 @@ import authRoutes from './routes/authRoutes.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
+// Create Express app
+export const app = express();
 
 // Session middleware
 app.use(session({ 
@@ -17,8 +18,8 @@ app.use(session({
   resave: false, 
   saveUninitialized: true,
   cookie: {
-    secure: false, // Set to true in production with HTTPS
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    secure: false,
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
@@ -45,6 +46,15 @@ app.get('/health', (req, res) => {
   });
 });
 
+// 404 handler
+app.use((req, res) => {
+  res.status(404).send(`
+    <h1>Page Not Found</h1>
+    <p>The page you're looking for doesn't exist.</p>
+    <a href="/">← Back to Home</a>
+  `);
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Unhandled error:', error);
@@ -55,28 +65,24 @@ app.use((error, req, res, next) => {
   `);
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).send(`
-    <h1>Page Not Found</h1>
-    <p>The page you're looking for doesn't exist.</p>
-    <a href="/">← Back to Home</a>
-  `);
-});
-
-// Initialize and start server
-async function startServer() {
+// Server initialization function
+export async function startServer() {
   try {
     await authService.initialize();
     
-    app.listen(config.port, () => {
+    const server = app.listen(config.port, () => {
       console.log(`🚀 Monster Energy OIDC Portal running on port ${config.port}`);
       console.log(`🌐 Available at: ${config.baseUrl}`);
     });
+    
+    return server;
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
   }
 }
 
-startServer();
+// Only start server if this file is run directly (not imported for testing)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startServer();
+}
