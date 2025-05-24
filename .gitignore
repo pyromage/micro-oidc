@@ -1,10 +1,14 @@
 node_modules/
 .env
 .env.local
+.env.production
+coverage/
 *.log
 .DS_Store
-certs/
-*.pem
-npm-debug.log*
 dist/
 build/
+.railway/
+
+# Test artifacts
+__tests__/tmp/
+test-results/
