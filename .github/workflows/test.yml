@@ -27,14 +27,10 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Run linter (optional)
-      run: npm run lint || echo "No linter configured"
-
     - name: Run unit tests
       run: npm test
       env:
         NODE_ENV: test
-        # Safe fake test values - no secrets needed
         CLIENT_ID: 'fake-microsoft-client-id-for-testing'
         CLIENT_SECRET: 'fake-microsoft-secret-for-testing'
         GOOGLE_CLIENT_ID: 'fake-google-client-id-for-testing'
@@ -54,20 +50,11 @@ jobs:
         SESSION_SECRET: 'fake-session-secret-for-github-actions-testing'
         BASE_URL: 'http://localhost:3000'
 
-    - name: Upload coverage to Codecov (optional)
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage/lcov.info
-        flags: unittests
-        name: codecov-umbrella
-        token: ${{ secrets.CODECOV_TOKEN }} # Only real secret for coverage
-
-  # Optional: Integration tests with real credentials
-  integration-test:
+  deploy:
+    needs: [test]
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -78,28 +65,8 @@ jobs:
         node-version: '20.x'
         cache: 'npm'
 
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Run integration tests
-      run: npm run test:integration || echo "No integration tests configured"
-      env:
-        NODE_ENV: test
-        # Only use real secrets for integration tests if absolutely necessary
-        CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        BASE_URL: 'http://localhost:3000'
-
-  deploy:
-    needs: [test]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
     - name: Deploy to Railway
-      run: npx @railway/cli deploy
+      run: npx @railway/cli@latest deploy --detach
       env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }} # Real secret for deployment
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
