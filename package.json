@@ -2,11 +2,11 @@
   "name": "monster-oidc",
   "version": "2.0.0",
   "description": "Monster Energy themed OIDC authentication portal",
-  "main": "test.js",
+  "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node test.js",
-    "dev": "node --watch test.js",
+    "start": "node server.js",
+    "dev": "node --watch server.js",
     "health": "curl -f http://localhost:3000/health || exit 1"
   },
   "dependencies": {
