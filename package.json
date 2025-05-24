@@ -7,11 +7,12 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest --verbose",
-    "test:watch": "NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest --watch --verbose",
-    "test:coverage": "NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest --coverage --verbose",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage",
     "test:coverage:open": "npm run test:coverage && open coverage/lcov-report/index.html",
     "test:coverage:json": "NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=json-summary",
+    "test:templates": "node --experimental-vm-modules node_modules/.bin/jest templates.test.js",
     "coverage:view": "open coverage/lcov-report/index.html",
     "health": "curl -f http://localhost:3000/health || exit 1"
   },
